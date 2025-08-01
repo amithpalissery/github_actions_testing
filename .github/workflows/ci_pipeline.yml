@@ -1,0 +1,51 @@
+name: CI Pipeline
+run-name: ${{ github.actor }} is running the CI Pipeline 🚀
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'feature/*'
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  build_and_validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+        
+      - name: 🧪 Run unit tests
+        run: npm test
+      
+      - name: 📦 Build Docker image
+        run: |
+          docker build -t node-demo-app .
+          docker tag node-demo-app your-docker-registry/node-demo-app:latest
+
+      - name: 🛡️ Run Trivy vulnerability scan (DevSecOps: SCA/SAST)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'your-docker-registry/node-demo-app:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+
+      - name: ⬆️ Upload artifact for CD pipeline
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-artifact
+          path: |
+            echo "your-docker-registry/node-demo-app:latest" > image_tag.txt
+            image_tag.txt
