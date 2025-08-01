@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-demo-app
+  labels:
+    app: node-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: node-demo
+  template:
+    metadata:
+      labels:
+        app: node-demo
+    spec:
+      containers:
+      - name: node-demo-container
+        image: your-docker-registry/node-demo-app:latest # REPLACE with your Docker image name
+        ports:
+        - containerPort: 3000
