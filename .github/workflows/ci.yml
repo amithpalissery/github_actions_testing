@@ -1,5 +1,4 @@
-name: CI Pipeline
-run-name: ${{ github.actor }} is running the CI Pipeline 🚀
+name: CI/CD Pipeline
 
 on:
   push:
@@ -16,7 +15,7 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-      
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
@@ -24,28 +23,43 @@ jobs:
       
       - name: Install dependencies
         run: npm install
-        
+
       - name: 🧪 Run unit tests
         run: npm test
       
-      - name: 📦 Build Docker image
+      - name: 📦 Build and Tag Docker image
         run: |
-          docker build -t node-demo-app .
-          docker tag node-demo-app your-docker-registry/node-demo-app:latest
+          IMAGE_TAG=${{ secrets.DOCKER_USERNAME }}/node-demo-app:${{ github.sha }}
+          docker build -t $IMAGE_TAG .
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-      - name: 🛡️ Run Trivy vulnerability scan (DevSecOps: SCA/SAST)
+      - name: 🛡️ Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'your-docker-registry/node-demo-app:latest'
+          image-ref: ${{ env.IMAGE_TAG }}
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
 
-      - name: ⬆️ Upload artifact for CD pipeline
-        uses: actions/upload-artifact@v3
-        with:
-          name: deployment-artifact
-          path: |
-            echo "your-docker-registry/node-demo-app:latest" > image_tag.txt
-            image_tag.txt
+      - name: Push Docker image to registry
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push ${{ env.IMAGE_TAG }}
+          
+  deploy:
+    runs-on: self-hosted
+    needs: build_and_validate
+    if: github.ref == 'refs/heads/main' && github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      
+      - name: 🚀 Deploy to Kubernetes
+        run: |
+          IMAGE_TAG=${{ secrets.DOCKER_USERNAME }}/node-demo-app:${{ github.sha }}
+          
+          sed -i "s|image: your-docker-registry/node-demo-app:latest|image: $IMAGE_TAG|" k8s-manifests/deployment.yaml
+          
+          kubectl apply -f k8s-manifests/
